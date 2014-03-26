@@ -1,25 +1,25 @@
 $(function() {
 
 	$.getJSON('http://www.highcharts.com/samples/data/jsonp.php?filename=large-dataset.json&callback=?', function(data) {
-	
+
 		// Create a timer
 		var start = + new Date();
-	
+
 		// Create the chart
-		var chart = new Highcharts.StockChart({
+		$('#container').highcharts('StockChart', {
 		    chart: {
-		        renderTo: 'container',
 				events: {
 					load: function(chart) {
 						this.setTitle(null, {
-							text: 'Built chart at '+ (new Date() - start) +'ms'
+							text: 'Built chart in '+ (new Date() - start) +'ms'
 						});
 					}
 				},
 				zoomType: 'x'
 		    },
-	
+
 		    rangeSelector: {
+				inputEnabled: $('#container').width() > 480,
 		        buttons: [{
 		            type: 'day',
 		            count: 3,
@@ -46,21 +46,21 @@ $(function() {
 		        }],
 		        selected: 3
 		    },
-	
+
 			yAxis: {
 				title: {
 					text: 'Temperature (°C)'
 				}
 			},
-	
+
 		    title: {
 				text: 'Hourly temperatures in Vik i Sogn, Norway, 2004-2010'
 			},
-	
+
 			subtitle: {
-				text: 'Built chart at...' // dummy text to reserve space for dynamic subtitle
+				text: 'Built chart in ...' // dummy text to reserve space for dynamic subtitle
 			},
-			
+
 			series: [{
 		        name: 'Temperature',
 		        data: data,
@@ -71,7 +71,7 @@ $(function() {
 		        	valueSuffix: '°C'
 		        }
 		    }]
-	
+
 		});
 	});
 });

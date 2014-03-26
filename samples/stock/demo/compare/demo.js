@@ -29,12 +29,12 @@ $(function() {
 	// create the chart when all data is loaded
 	function createChart() {
 
-		chart = new Highcharts.StockChart({
+		$('#container').highcharts('StockChart', {
 		    chart: {
-		        renderTo: 'container'
 		    },
 
 		    rangeSelector: {
+				inputEnabled: $('#container').width() > 480,
 		        selected: 4
 		    },
 

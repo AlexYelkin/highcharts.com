@@ -20,84 +20,35 @@ defaultPlotOptions.arearange = merge(defaultPlotOptions.area, {
 		xHigh: 0,
 		yLow: 0,
 		yHigh: 0	
-	},
-	shadow: false
-});
-
-/**
- * Extend the point object
- */
-var RangePoint = Highcharts.extendClass(Highcharts.Point, {
-	/**
-	 * Apply the options containing the x and low/high data and possible some extra properties.
-	 * This is called on point init or from point.update. Extends base Point by adding
-	 * multiple y-like values.
-	 *
-	 * @param {Object} options
-	 */
-	applyOptions: function (options, x) {
-		var point = this,
-			series = point.series,
-			pointArrayMap = series.pointArrayMap,
-			i = 0,
-			j = 0,
-			valueCount = pointArrayMap.length;
-
-
-		// object input
-		if (typeof options === 'object' && typeof options.length !== 'number') {
-
-			// copy options directly to point
-			extend(point, options);
-
-			point.options = options;
-			
-		} else if (options.length) { // array
-			// with leading x value
-			if (options.length > valueCount) {
-				if (typeof options[0] === 'string') {
-					point.name = options[0];
-				} else if (typeof options[0] === 'number') {
-					point.x = options[0];
-				}
-				i++;
-			}
-			while (j < valueCount) {
-				point[pointArrayMap[j++]] = options[i++];
-			}
-		}
-
-		// Handle null and make low alias y
-		/*if (point.high === null) {
-			point.low = null;
-		}*/
-		point.y = point[series.pointValKey];
-		
-		// If no x is set by now, get auto incremented value. All points must have an
-		// x value, however the y value can be null to create a gap in the series
-		if (point.x === UNDEFINED && series) {
-			point.x = x === UNDEFINED ? series.autoIncrement() : x;
-		}
-		
-		return point;
-	},
-	
-	/**
-	 * Return a plain array for speedy calculation
-	 */
-	toYData: function () {
-		return [this.low, this.high];
 	}
 });
 
 /**
  * Add the series type
  */
-seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
+seriesTypes.arearange = extendClass(seriesTypes.area, {
 	type: 'arearange',
 	pointArrayMap: ['low', 'high'],
-	pointClass: RangePoint,
+	toYData: function (point) {
+		return [point.low, point.high];
+	},
 	pointValKey: 'low',
+	
+	/**
+	 * Extend getSegments to force null points if the higher value is null. #1703.
+	 */
+	getSegments: function () {
+		var series = this;
+
+		each(series.points, function (point) {
+			if (!series.options.connectNulls && (point.low === null || point.high === null)) {
+				point.y = null;
+			} else if (point.low === null && point.high !== null) {
+				point.y = point.high;
+			}
+		});
+		Series.prototype.getSegments.call(this);
+	},
 	
 	/**
 	 * Translate data points from raw values x and y to plotX and plotY
@@ -110,10 +61,22 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 
 		// Set plotLow and plotHigh
 		each(series.points, function (point) {
-			
-			if (point.y !== null) {
-				point.plotLow = point.plotY;
-				point.plotHigh = yAxis.translate(point.high, 0, 1, 0, 1);
+
+			var low = point.low,
+				high = point.high,
+				plotY = point.plotY;
+
+			if (high === null && low === null) {
+				point.y = null;
+			} else if (low === null) {
+				point.plotLow = point.plotY = null;
+				point.plotHigh = yAxis.translate(high, 0, 1, 0, 1);
+			} else if (high === null) {
+				point.plotLow = plotY;
+				point.plotHigh = null;
+			} else {
+				point.plotLow = plotY;
+				point.plotHigh = yAxis.translate(high, 0, 1, 0, 1);
 			}
 		});
 	},
@@ -124,7 +87,8 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 	 */
 	getSegmentPath: function (segment) {
 		
-		var highSegment = [],
+		var lowSegment,
+			highSegment = [],
 			i = segment.length,
 			baseGetSegmentPath = Series.prototype.getSegmentPath,
 			point,
@@ -134,17 +98,24 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 			step = options.step,
 			higherPath;
 			
+		// Remove nulls from low segment
+		lowSegment = HighchartsAdapter.grep(segment, function (point) {
+			return point.plotLow !== null;
+		});
+		
 		// Make a segment with plotX and plotY for the top values
 		while (i--) {
 			point = segment[i];
-			highSegment.push({
-				plotX: point.plotX,
-				plotY: point.plotHigh
-			});
+			if (point.plotHigh !== null) {
+				highSegment.push({
+					plotX: point.plotX,
+					plotY: point.plotHigh
+				});
+			}
 		}
 		
 		// Get the paths
-		lowerPath = baseGetSegmentPath.call(this, segment);
+		lowerPath = baseGetSegmentPath.call(this, lowSegment);
 		if (step) {
 			if (step === true) {
 				step = 'left';
@@ -188,6 +159,7 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 				
 				// Set preliminary values
 				point.y = point.high;
+				point._plotY = point.plotY;
 				point.plotY = point.plotHigh;
 				
 				// Store original data labels and set preliminary label objects to be picked up 
@@ -204,7 +176,10 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 					dataLabelOptions.y = dataLabelOptions.yHigh;
 				}
 			}
-			seriesProto.drawDataLabels.apply(this, arguments); // #1209
+			
+			if (seriesProto.drawDataLabels) {
+				seriesProto.drawDataLabels.apply(this, arguments); // #1209
+			}
 			
 			// Step 2: reorganize and handle data labels for the lower values
 			i = length;
@@ -217,7 +192,7 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 				
 				// Reset values
 				point.y = point.low;
-				point.plotY = point.plotLow;
+				point.plotY = point._plotY;
 				
 				// Set the default offset
 				point.below = true;
@@ -228,12 +203,16 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 					dataLabelOptions.y = dataLabelOptions.yLow;
 				}
 			}
-			seriesProto.drawDataLabels.apply(this, arguments);
+			if (seriesProto.drawDataLabels) {
+				seriesProto.drawDataLabels.apply(this, arguments);
+			}
 		}
 	
 	},
 	
-	alignDataLabel: seriesTypes.column.prototype.alignDataLabel,
+	alignDataLabel: function () {
+		seriesTypes.column.prototype.alignDataLabel.apply(this, arguments);
+	},
 	
 	getSymbol: seriesTypes.column.prototype.getSymbol,
 	

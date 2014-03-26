@@ -6,7 +6,7 @@ var
 defaultLabelOptions = {
 	enabled: true,
 	// rotation: 0,
-	align: 'center',
+	// align: 'center',
 	x: 0,
 	y: 15,
 	/*formatter: function () {
@@ -14,14 +14,15 @@ defaultLabelOptions = {
 	},*/
 	style: {
 		color: '#666',
-		fontSize: '11px',
-		lineHeight: '14px'
+		cursor: 'default',
+		fontSize: '11px'
 	}
 };
 
 defaultOptions = {
-	colors: ['#4572A7', '#AA4643', '#89A54E', '#80699B', '#3D96AE',
-		'#DB843D', '#92A8CD', '#A47D7C', '#B5CA92'],
+	colors: ['#2f7ed8', '#0d233a', '#8bbc21', '#910000', '#1aadce', '#492970',
+		'#f28f43', '#77a1e5', '#c42525', '#a6c96a'],
+	//colors: ['#8085e8', '#252530', '#90ee7e', '#8d4654', '#2b908f', '#76758e', '#f6a45c', '#7eb5ee', '#f45b5b', '#9ff0cf'],
 	symbols: ['circle', 'diamond', 'square', 'triangle', 'triangle-down'],
 	lang: {
 		loading: 'Loading...',
@@ -37,6 +38,7 @@ defaultOptions = {
 	},
 	global: {
 		useUTC: true,
+		//timezoneOffset: 0,
 		canvasToolsURL: 'http://code.highcharts.com@product.cdnpath@/@product.version@/modules/canvas-tools.js',
 		VMLRadialGradientURL: 'http://code.highcharts.com@product.cdnpath@/@product.version@/gfx/vml-radial-gradient.png'
 	},
@@ -58,14 +60,15 @@ defaultOptions = {
 		ignoreHiddenSeries: true,
 		//inverted: false,
 		//shadow: false,
-		spacingTop: 10,
-		spacingRight: 10,
-		spacingBottom: 15,
-		spacingLeft: 10,
-		style: {
-			fontFamily: '"Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif', // default font
-			fontSize: '12px'
-		},
+		spacing: [10, 10, 15, 10],
+		//spacingTop: 10,
+		//spacingRight: 10,
+		//spacingBottom: 15,
+		//spacingLeft: 10,
+		//style: {
+		//	fontFamily: '"Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif', // default font
+		//	fontSize: '12px'
+		//},
 		backgroundColor: '#FFFFFF',
 		//plotBackgroundColor: null,
 		plotBorderColor: '#C0C0C0',
@@ -89,12 +92,12 @@ defaultOptions = {
 		text: 'Chart title',
 		align: 'center',
 		// floating: false,
-		// margin: 15,
+		margin: 15,
 		// x: 0,
 		// verticalAlign: 'top',
-		y: 15,
+		// y: null,
 		style: {
-			color: '#3E576F',
+			color: '#274b6d',//#3E576F',
 			fontSize: '16px'
 		}
 
@@ -105,9 +108,9 @@ defaultOptions = {
 		// floating: false
 		// x: 0,
 		// verticalAlign: 'top',
-		y: 30,
+		// y: null,
 		style: {
-			color: '#6D869F'
+			color: '#4d759e'
 		}
 	},
 
@@ -125,8 +128,9 @@ defaultOptions = {
 			//enableMouseTracking: true,
 			events: {},
 			//legendIndex: 0,
+			//linecap: 'round',
 			lineWidth: 2,
-			shadow: true,
+			//shadow: false,
 			// stacking: null,
 			marker: {
 				enabled: true,
@@ -151,9 +155,10 @@ defaultOptions = {
 				events: {}
 			},
 			dataLabels: merge(defaultLabelOptions, {
+				align: 'center',
 				enabled: false,
 				formatter: function () {
-					return this.y;
+					return this.y === null ? '' : numberFormat(this.y, -1);
 				},
 				verticalAlign: 'bottom', // above singular point
 				y: 0
@@ -168,7 +173,7 @@ defaultOptions = {
 			pointRange: 0,
 			//pointStart: 0,
 			//pointInterval: 1,
-			showInLegend: true,
+			//showInLegend: null, // auto: true for standalone series, false for linked series
 			states: { // states for the entire series
 				hover: {
 					//enabled: false,
@@ -182,7 +187,7 @@ defaultOptions = {
 					marker: {}
 				}
 			},
-			stickyTracking: true
+			stickyTracking: true,
 			//tooltip: {
 				//pointFormat: '<span style="color:{series.color}">{series.name}</span>: <b>{point.y}</b>'
 				//valueDecimals: null,
@@ -190,7 +195,7 @@ defaultOptions = {
 				//valuePrefix: '',
 				//ySuffix: ''				
 			//}
-			// turboThreshold: 1000
+			turboThreshold: 1000
 			// zIndex: null
 		}
 	},
@@ -215,7 +220,7 @@ defaultOptions = {
 		borderRadius: 5,
 		navigation: {
 			// animation: true,
-			activeColor: '#3E576F',
+			activeColor: '#274b6d',
 			// arrowSize: 12
 			inactiveColor: '#CCC'
 			// style: {} // text styles
@@ -227,9 +232,8 @@ defaultOptions = {
 		/*style: {
 			padding: '5px'
 		},*/
-		itemStyle: {
-			cursor: 'pointer',
-			color: '#3E576F',
+		itemStyle: {			
+			color: '#274b6d',
 			fontSize: '12px'
 		},
 		itemHoverStyle: {
@@ -245,12 +249,18 @@ defaultOptions = {
 			height: '13px'
 		},
 		// itemWidth: undefined,
-		symbolWidth: 16,
+		// symbolWidth: 16,
 		symbolPadding: 5,
 		verticalAlign: 'bottom',
 		// width: undefined,
 		x: 0,
-		y: 0
+		y: 0,
+		title: {
+			//text: null,
+			style: {
+				fontWeight: 'bold'
+			}
+		}			
 	},
 
 	loading: {
@@ -271,10 +281,11 @@ defaultOptions = {
 
 	tooltip: {
 		enabled: true,
+		animation: hasSVG,
 		//crosshairs: null,
 		backgroundColor: 'rgba(255, 255, 255, .85)',
-		borderWidth: 2,
-		borderRadius: 5,
+		borderWidth: 1,
+		borderRadius: 3,
 		dateTimeLabelFormats: { 
 			millisecond: '%A, %b %e, %H:%M:%S.%L',
 			second: '%A, %b %e, %H:%M:%S',
@@ -289,12 +300,13 @@ defaultOptions = {
 		headerFormat: '<span style="font-size: 10px">{point.key}</span><br/>',
 		pointFormat: '<span style="color:{series.color}">{series.name}</span>: <b>{point.y}</b><br/>',
 		shadow: true,
-		shared: useCanVG,
+		//shared: false,
 		snap: isTouchDevice ? 25 : 10,
 		style: {
 			color: '#333333',
+			cursor: 'default',
 			fontSize: '12px',
-			padding: '5px',
+			padding: '8px',
 			whiteSpace: 'nowrap'
 		}
 		//xDateFormat: '%A, %b %e, %Y',
@@ -316,7 +328,7 @@ defaultOptions = {
 		style: {
 			cursor: 'pointer',
 			color: '#909090',
-			fontSize: '10px'
+			fontSize: '9px'
 		}
 	}
 };
@@ -342,6 +354,8 @@ function setTimeMethods() {
 		GET = useUTC ? 'getUTC' : 'get',
 		SET = useUTC ? 'setUTC' : 'set';
 
+
+	timezoneOffset = ((useUTC && defaultOptions.global.timezoneOffset) || 0) * 60000;
 	makeTime = useUTC ? Date.UTC : function (year, month, date, hours, minutes, seconds) {
 		return new Date(
 			year,
@@ -372,13 +386,8 @@ function setTimeMethods() {
  */
 function setOptions(options) {
 	
-	// Pull out axis options and apply them to the respective default axis options 
-	/*defaultXAxisOptions = merge(defaultXAxisOptions, options.xAxis);
-	defaultYAxisOptions = merge(defaultYAxisOptions, options.yAxis);
-	options.xAxis = options.yAxis = UNDEFINED;*/
-	
-	// Merge in the default options
-	defaultOptions = merge(defaultOptions, options);
+	// Copy in the default options
+	defaultOptions = merge(true, defaultOptions, options);
 	
 	// Apply UTC
 	setTimeMethods();
@@ -387,8 +396,8 @@ function setOptions(options) {
 }
 
 /**
- * Get the updated default options. Merely exposing defaultOptions for outside modules
- * isn't enough because the setOptions method creates a new object.
+ * Get the updated default options. Until 3.0.7, merely exposing defaultOptions for outside modules
+ * wasn't enough because the setOptions method created a new object.
  */
 function getOptions() {
 	return defaultOptions;

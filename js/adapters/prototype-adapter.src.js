@@ -2,7 +2,7 @@
  * @license @product.name@ JS v@product.version@ (@product.date@)
  * Prototype adapter
  *
- * @author Michael Nelson, Torstein Hønsi.
+ * @author Michael Nelson, Torstein Honsi.
  *
  * Feel free to use and modify this script.
  * Highcharts license: www.highcharts.com/license.
@@ -206,8 +206,8 @@ return {
 		$A(arr).each(fn);
 	},
 	
-	inArray: function (item, arr) {
-		return arr.indexOf(item);
+	inArray: function (item, arr, from) {
+		return arr ? arr.indexOf(item, from) : -1;
 	},
 
 	/**
@@ -265,38 +265,6 @@ return {
 	map: function (arr, fn) {
 		return arr.map(fn);
 	},
-	
-	merge: function () { // the built-in prototype merge function doesn't do deep copy
-		function doCopy(copy, original) {
-			var value, key;
-
-			for (key in original) {
-				value = original[key];
-				if (value && typeof value === 'object' && value.constructor !== Array &&
-						typeof value.nodeType !== 'number') {
-					copy[key] = doCopy(copy[key] || {}, value); // copy
-
-				} else {
-					copy[key] = original[key];
-				}
-			}
-			return copy;
-		}
-
-		function merge() {
-			var args = arguments,
-				i,
-				retVal = {};
-
-			for (i = 0; i < args.length; i++) {
-				retVal = doCopy(retVal, args[i]);
-
-			}
-			return retVal;
-		}
-
-		return merge.apply(this, arguments);
-	},
 
 	// extend an object to handle highchart events (highchart objects, not svg elements).
 	// this is a very simple way of handling events but whatever, it works (i think)
@@ -321,6 +289,7 @@ return {
 					}
 				},
 				_highcharts_fire: function (name, args) {
+					var target = this;
 					(this._highchart_events[name] || []).each(function (fn) {
 						// args is never null here
 						if (args.stopped) {
@@ -331,6 +300,7 @@ return {
 						args.preventDefault = function () {
 							args.defaultPrevented = true;
 						};
+						args.target = target;
 
 						// If the event handler return false, prevent the default handler from executing
 						if (fn.bind(this)(args) === false) {

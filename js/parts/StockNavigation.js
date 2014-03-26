@@ -8,19 +8,20 @@ Chart.prototype.callbacks.push(function (chart) {
 
 	function renderScroller() {
 		extremes = chart.xAxis[0].getExtremes();
-		scroller.render(
-			mathMax(extremes.min, extremes.dataMin),
-			mathMin(extremes.max, extremes.dataMax)
-		);
+		scroller.render(extremes.min, extremes.max);
 	}
 
 	function renderRangeSelector() {
 		extremes = chart.xAxis[0].getExtremes();
-		rangeSelector.render(extremes.min, extremes.max);
+		if (!isNaN(extremes.min)) {
+			rangeSelector.render(extremes.min, extremes.max);
+		}
 	}
 
 	function afterSetExtremesHandlerScroller(e) {
-		scroller.render(e.min, e.max);
+		if (e.triggerOp !== 'navigator-drag') {
+			scroller.render(e.min, e.max);
+		}
 	}
 
 	function afterSetExtremesHandlerRangeSelector(e) {
@@ -29,7 +30,6 @@ Chart.prototype.callbacks.push(function (chart) {
 
 	function destroyEvents() {
 		if (scroller) {
-			removeEvent(chart, 'resize', renderScroller);
 			removeEvent(chart.xAxis[0], 'afterSetExtremes', afterSetExtremesHandlerScroller);
 		}
 		if (rangeSelector) {
@@ -43,8 +43,14 @@ Chart.prototype.callbacks.push(function (chart) {
 		// redraw the scroller on setExtremes
 		addEvent(chart.xAxis[0], 'afterSetExtremes', afterSetExtremesHandlerScroller);
 
-		// redraw the scroller chart resize
-		addEvent(chart, 'resize', renderScroller);
+		// redraw the scroller on chart resize or box resize
+		wrap(chart, 'drawChartBox', function (proceed) {
+			var isDirtyBox = this.isDirtyBox;
+			proceed.call(this);
+			if (isDirtyBox) {
+				renderScroller();
+			}
+		});
 
 		// do it now
 		renderScroller();

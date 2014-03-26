@@ -14,6 +14,80 @@ defaultPlotOptions.area = merge(defaultSeriesOptions, {
  */
 var AreaSeries = extendClass(Series, {
 	type: 'area',
+	/**
+	 * For stacks, don't split segments on null values. Instead, draw null values with 
+	 * no marker. Also insert dummy points for any X position that exists in other series
+	 * in the stack.
+	 */ 
+	getSegments: function () {
+		var segments = [],
+			segment = [],
+			keys = [],
+			xAxis = this.xAxis,
+			yAxis = this.yAxis,
+			stack = yAxis.stacks[this.stackKey],
+			pointMap = {},
+			plotX,
+			plotY,
+			points = this.points,
+			connectNulls = this.options.connectNulls,
+			val,
+			i,
+			x;
+
+		if (this.options.stacking && !this.cropped) { // cropped causes artefacts in Stock, and perf issue
+			// Create a map where we can quickly look up the points by their X value.
+			for (i = 0; i < points.length; i++) {
+				pointMap[points[i].x] = points[i];
+			}
+
+			// Sort the keys (#1651)
+			for (x in stack) {
+				if (stack[x].total !== null) { // nulled after switching between grouping and not (#1651, #2336)
+					keys.push(+x);
+				}
+			}
+			keys.sort(function (a, b) {
+				return a - b;
+			});
+
+			each(keys, function (x) {
+				if (connectNulls && (!pointMap[x] || pointMap[x].y === null)) { // #1836
+					return;
+
+				// The point exists, push it to the segment
+				} else if (pointMap[x]) {
+					segment.push(pointMap[x]);
+
+				// There is no point for this X value in this series, so we 
+				// insert a dummy point in order for the areas to be drawn
+				// correctly.
+				} else {
+					plotX = xAxis.translate(x);
+					val = stack[x].percent ? (stack[x].total ? stack[x].cum * 100 / stack[x].total : 0) : stack[x].cum; // #1991
+					plotY = yAxis.toPixels(val, true);
+					segment.push({ 
+						y: null, 
+						plotX: plotX,
+						clientX: plotX, 
+						plotY: plotY, 
+						yBottom: plotY,
+						onMouseOver: noop
+					});
+				}
+			});
+
+			if (segment.length) {
+				segments.push(segment);
+			}
+
+		} else {
+			Series.prototype.getSegments.call(this);
+			segments = this.segments;
+		}
+
+		this.segments = segments;
+	},
 	
 	/**
 	 * Extend the base Series getSegmentPath method by adding the path for the area.
@@ -25,7 +99,9 @@ var AreaSeries = extendClass(Series, {
 			areaSegmentPath = [].concat(segmentPath), // work on a copy for the area path
 			i,
 			options = this.options,
-			segLength = segmentPath.length;
+			segLength = segmentPath.length,
+			translatedThreshold = this.yAxis.getThreshold(options.threshold), // #2181
+			yBottom;
 		
 		if (segLength === 3) { // for animation from 1 to two points
 			areaSegmentPath.push(L, segmentPath[1], segmentPath[2]);
@@ -36,20 +112,21 @@ var AreaSeries = extendClass(Series, {
 			// reverse the entire graphPath of the previous series, though may be hard with
 			// splines and with series with different extremes
 			for (i = segment.length - 1; i >= 0; i--) {
+
+				yBottom = pick(segment[i].yBottom, translatedThreshold);
 			
 				// step line?
 				if (i < segment.length - 1 && options.step) {
-					areaSegmentPath.push(segment[i + 1].plotX, segment[i].yBottom);
+					areaSegmentPath.push(segment[i + 1].plotX, yBottom);
 				}
 				
-				areaSegmentPath.push(segment[i].plotX, segment[i].yBottom);
+				areaSegmentPath.push(segment[i].plotX, yBottom);
 			}
 
 		} else { // follow zero line back
-			this.closeSegment(areaSegmentPath, segment);
+			this.closeSegment(areaSegmentPath, segment, translatedThreshold);
 		}
 		this.areaPath = this.areaPath.concat(areaSegmentPath);
-		
 		return segmentPath;
 	},
 	
@@ -57,8 +134,7 @@ var AreaSeries = extendClass(Series, {
 	 * Extendable method to close the segment path of an area. This is overridden in polar 
 	 * charts.
 	 */
-	closeSegment: function (path, segment) {
-		var translatedThreshold = this.yAxis.getThreshold(this.options.threshold);
+	closeSegment: function (path, segment, translatedThreshold) {
 		path.push(
 			L,
 			segment[segment.length - 1].plotX,
@@ -83,45 +159,39 @@ var AreaSeries = extendClass(Series, {
 		Series.prototype.drawGraph.apply(this);
 		
 		// Define local variables
-		var areaPath = this.areaPath,
+		var series = this,
+			areaPath = this.areaPath,
 			options = this.options,
-			area = this.area;
+			negativeColor = options.negativeColor,
+			negativeFillColor = options.negativeFillColor,
+			props = [['area', this.color, options.fillColor]]; // area name, main color, fill color
 		
-		// Create or update the area
-		if (area) { // update
-			area.animate({ d: areaPath });
-
-		} else { // create
-			this.area = this.chart.renderer.path(areaPath)
-				.attr({
-					fill: pick(
-						options.fillColor,
-						Color(this.color).setOpacity(options.fillOpacity || 0.75).get()
-					),
-					zIndex: 0 // #1069
-				}).add(this.group);
+		if (negativeColor || negativeFillColor) {
+			props.push(['areaNeg', negativeColor, negativeFillColor]);
 		}
-	},
+		
+		each(props, function (prop) {
+			var areaKey = prop[0],
+				area = series[areaKey];
+				
+			// Create or update the area
+			if (area) { // update
+				area.animate({ d: areaPath });
 	
-	/**
-	 * Get the series' symbol in the legend
-	 * 
-	 * @param {Object} legend The legend object
-	 * @param {Object} item The series (this) or point
-	 */
-	drawLegendSymbol: function (legend, item) {
-		
-		item.legendSymbol = this.chart.renderer.rect(
-			0,
-			legend.baseline - 11,
-			legend.options.symbolWidth,
-			12,
-			2
-		).attr({
-			zIndex: 3
-		}).add(item.legendGroup);		
-		
-	}
+			} else { // create
+				series[areaKey] = series.chart.renderer.path(areaPath)
+					.attr({
+						fill: pick(
+							prop[2],
+							Color(prop[1]).setOpacity(pick(options.fillOpacity, 0.75)).get()
+						),
+						zIndex: 0 // #1069
+					}).add(series.group);
+			}
+		});
+	},
+
+	drawLegendSymbol: LegendSymbolMixin.drawRectangle
 });
 
 seriesTypes.area = AreaSeries;

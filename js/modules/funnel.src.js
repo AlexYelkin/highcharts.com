@@ -1,67 +1,76 @@
 /**
- * @license Highcharts JS v2.1.4 (2011-03-02)
- * Funnel module, Beta
+ * @license 
+ * Highcharts funnel module
  *
- * (c) 2010 Torstein Hønsi
+ * (c) 2010-2014 Torstein Honsi
  *
  * License: www.highcharts.com/license
  */
 
-/*
- * To do:
- * - Bugs on width and height. Experiment with different container size and funnel positions.
- * - Tooltip missing on last point
- */
-
-(function(){
+/*global Highcharts */
+(function (Highcharts) {
+	
+'use strict';
 
 // create shortcuts
-var HC = Highcharts,
-	addEvent = HC.addEvent,
-	defaultOptions = HC.getOptions(),
+var defaultOptions = Highcharts.getOptions(),
 	defaultPlotOptions = defaultOptions.plotOptions,
-	seriesTypes = HC.seriesTypes,
-	map = HC.map,
-	merge = HC.merge,
-	each = HC.each,
-	math = Math;
+	seriesTypes = Highcharts.seriesTypes,
+	merge = Highcharts.merge,
+	noop = function () {},
+	each = Highcharts.each;
 
 // set default options
 defaultPlotOptions.funnel = merge(defaultPlotOptions.pie, {
+	center: ['50%', '50%'],
 	width: '90%',
 	neckWidth: '30%',
 	height: '100%',
 	neckHeight: '25%',
-
+	reversed: false,
 	dataLabels: {
+		//position: 'right',
 		connectorWidth: 1,
 		connectorColor: '#606060'
-	}
+	},
+	size: true, // to avoid adapting to data label size in Pie.drawDataLabels
+	states: {
+		select: {
+			color: '#C0C0C0',
+			borderColor: '#000000',
+			shadow: false
+		}
+	}	
 });
 
-var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
-	type: 'funnel',
 
+seriesTypes.funnel = Highcharts.extendClass(seriesTypes.pie, {
+	
+	type: 'funnel',
+	animate: noop,
+	singularTooltips: true,
 
 	/**
 	 * Overrides the pie translate method
 	 */
-	translate: function() {
-		// get positions - either an integer or a percentage string must be given
-		function getLength(length, relativeTo) {
-			return /%$/.test(length) ?
-				relativeTo * parseInt(length, 10) / 100:
-				parseInt(length, 10);
-		};
-
-
-		var sum = 0,
+	translate: function () {
+		
+		var 
+			// Get positions - either an integer or a percentage string must be given
+			getLength = function (length, relativeTo) {
+				return (/%$/).test(length) ?
+					relativeTo * parseInt(length, 10) / 100 :
+					parseInt(length, 10);
+			},
+			
+			sum = 0,
 			series = this,
 			chart = series.chart,
+			options = series.options,
+			reversed = options.reversed,
 			plotWidth = chart.plotWidth,
 			plotHeight = chart.plotHeight,
 			cumulative = 0, // start at top
-			options = series.options,
 			center = options.center,
 			centerX = getLength(center[0], plotWidth),
 			centerY = getLength(center[0], plotHeight),
@@ -74,18 +83,29 @@ var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
 			neckY = height - neckHeight,
 			data = series.data,
 			path,
+			fraction,
+			half = options.dataLabels.position === 'left' ? 1 : 0,
 
-			x1, y1, x2, x3, y3, x4, y5;
+			x1, 
+			y1, 
+			x2, 
+			x3, 
+			y3, 
+			x4, 
+			y5;
 
 		// Return the width at a specific y coordinate
-		series.getWidthAt = getWidthAt = function(y) {
-			return y > height - neckHeight ?
+		series.getWidthAt = getWidthAt = function (y) {
+			return y > height - neckHeight || height === neckHeight ?
 				neckWidth :
 				neckWidth + (width - neckWidth) * ((height - neckHeight - y) / (height - neckHeight));
-
+		};
+		series.getX = function (y, half) {
+					return centerX + (half ? -1 : 1) * ((getWidthAt(reversed ? plotHeight - y : y) / 2) + options.dataLabels.distance);
 		};
 
 		// Expose
+		series.center = [centerX, centerY, height];
 		series.centerX = centerX;
 
 		/*
@@ -111,15 +131,15 @@ var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
 
 
 		// get the total sum
-		each (data, function(point) {
+		each(data, function (point) {
 			sum += point.y;
 		});
 
-		each (data, function(point) {
+		each(data, function (point) {
 			// set start and end positions
 			y5 = null;
 			fraction = sum ? point.y / sum : 0;
-			y1 = cumulative * height;
+			y1 = centerY - height / 2 + cumulative * height;
 			y3 = y1 + fraction * height;
 			//tempWidth = neckWidth + (width - neckWidth) * ((height - neckHeight - y1) / (height - neckHeight));
 			tempWidth = getWidthAt(y1);
@@ -133,10 +153,9 @@ var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
 			if (y1 > neckY) {
 				x1 = x3 = centerX - neckWidth / 2;
 				x2 = x4 = centerX + neckWidth / 2;
-			}
-
+			
 			// the base of the neck
-			else if (y3 > neckY) {
+			} else if (y3 > neckY) {
 				y5 = y3;
 
 				tempWidth = getWidthAt(neckY);
@@ -146,6 +165,11 @@ var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
 				y3 = neckY;
 			}
 
+			if (reversed) {
+				y1 = height - y1;
+				y3 = height - y3;
+				y5 = (y5 ? height - y5 : null);
+			}
 			// save the path
 			path = [
 				'M',
@@ -161,7 +185,7 @@ var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
 
 			// prepare for using shared dr
 			point.shapeType = 'path';
-			point.shapeArgs = path;
+			point.shapeArgs = { d: path };
 
 
 			// for tooltips and data labels
@@ -175,11 +199,14 @@ var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
 				point.plotY
 			];
 
+			// Slice is a noop on funnel points
+			point.slice = noop;
+			
+			// Mimicking pie data label placement logic
+			point.half = half;
+
 			cumulative += fraction;
-		});
-
-
-		series.setTooltipPoints();
+		});		
 	},
 	/**
 	 * Draw a single point (wedge)
@@ -187,75 +214,96 @@ var FunnelSeries = Highcharts.extendClass(seriesTypes.pie, {
 	 * @param {Object} color The color of the point
 	 * @param {Number} brightness The brightness relative to the color
 	 */
-	drawPoints: function(point) {
+	drawPoints: function () {
 		var series = this,
 			options = series.options,
 			chart = series.chart,
-			renderer = chart.renderer,
-			trackerRect = chart.trackerRect,
-			plotLeft = chart.plotLeft,
-			plotTop = chart.plotTop;
-			//y = point.y,
-			//height = point.height;
+			renderer = chart.renderer;
 
-		each (series.data, function(point) {
+		each(series.data, function (point) {
+			
+			var graphic = point.graphic,
+				shapeArgs = point.shapeArgs;
 
-			if (!point.group) {
-
-				point.group = renderer.g('point').add(series.group).
-					translate(plotLeft, plotTop);
-
-
-				point.graphic = renderer.path(point.shapeArgs).
+			if (!graphic) { // Create the shapes
+				point.graphic = renderer.path(shapeArgs).
 					attr({
-						//fill: Color(color).brighten(brightness).get(ctx),
 						fill: point.color,
 						stroke: options.borderColor,
 						'stroke-width': options.borderWidth
 					}).
-					add(point.group);
-
+					add(series.group);
+					
+			} else { // Update the shapes
+				graphic.animate(shapeArgs);
 			}
 		});
 	},
 
-	drawDataLabels: function() {
-		var series = this,
-			dataLabelOptions = series.options.dataLabels,
-			connectorWidth = dataLabelOptions.connectorWidth;
-
-		HC.Series.prototype.drawDataLabels.apply(series);
-
-		each(series.data, function(point) {
-			var bBox = point.dataLabel.getBBox(),
-				y = bBox.y + bBox.height / 2 + connectorWidth / 2 % 1
-			point.connector = series.chart.renderer.path([
-				'M',
-				bBox.x + bBox.width + 5, y,
-				'L',
-				series.centerX - series.getWidthAt(y) / 2 - 5, y
-			]).attr({
-				'stroke-width': connectorWidth,
-				stroke: dataLabelOptions.connectorColor
-			}).add(point.group);
+	/**
+	 * Funnel items don't have angles (#2289)
+	 */
+	sortByAngle: function (points) {
+		points.sort(function (a, b) {
+			return a.plotY - b.plotY;
 		});
+	},
+	
+	/**
+	 * Extend the pie data label method
+	 */
+	drawDataLabels: function () {
+		var data = this.data,
+			labelDistance = this.options.dataLabels.distance,
+			leftSide,
+			sign,
+			point,
+			i = data.length,
+			x,
+			y;
+		
+		// In the original pie label anticollision logic, the slots are distributed
+		// from one labelDistance above to one labelDistance below the pie. In funnels
+		// we don't want this.
+		this.center[2] -= 2 * labelDistance;
+		
+		// Set the label position array for each point.
+		while (i--) {
+			point = data[i];
+			leftSide = point.half;
+			sign = leftSide ? 1 : -1;
+			y = point.plotY;
+			x = this.getX(y, leftSide);
+				
+			// set the anchor point for data labels
+			point.labelPos = [
+				0, // first break of connector
+				y, // a/a
+				x + (labelDistance - 5) * sign, // second break, right outside point shape
+				y, // a/a
+				x + labelDistance * sign, // landing point for connector
+				y, // a/a
+				leftSide ? 'right' : 'left', // alignment
+				0 // center angle
+			];
+		}
+		
+		seriesTypes.pie.prototype.drawDataLabels.call(this);
 	}
 
-	/* *
-	 * Draw a connector from an individual point to its data label
-	 * /
-	drawConnector: function(point) {
-		var series = this,
-			dataLabelOptions = series.options.dataLabels,
-			bBox = point.dataLabel.getBBox(),
-			connectorWidth = dataLabelOptions.connectorWidth,
-			y = bBox.y + bBox.height / 2 + connectorWidth / 2 % 1;
-
-
-	}*/
-
 });
-seriesTypes.funnel = FunnelSeries;
 
+/** 
+ * Pyramid series type.
+ * A pyramid series is a special type of funnel, without neck and reversed by default.
+ */
+defaultOptions.plotOptions.pyramid = Highcharts.merge(defaultOptions.plotOptions.funnel, {        
+	neckWidth: '0%',
+	neckHeight: '0%',
+	reversed: true
+});
+Highcharts.seriesTypes.pyramid = Highcharts.extendClass(Highcharts.seriesTypes.funnel, {
+	type: 'pyramid'
+});
 
-})();
+}(Highcharts));

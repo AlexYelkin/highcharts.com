@@ -1,9 +1,6 @@
 $(function () {
-    var chart;
-    $(document).ready(function() {
-        chart = new Highcharts.Chart({
+        $('#container').highcharts({
             chart: {
-                renderTo: 'container',
                 type: 'line'
             },
             title: {
@@ -30,7 +27,10 @@ $(function () {
             plotOptions: {
                 line: {
                     dataLabels: {
-                        enabled: true
+                        enabled: true,
+                        style: {
+                            textShadow: '0 0 3px white, 0 0 3px white'
+                        }
                     },
                     enableMouseTracking: false
                 }
@@ -45,4 +45,3 @@ $(function () {
         });
     });
     
-});

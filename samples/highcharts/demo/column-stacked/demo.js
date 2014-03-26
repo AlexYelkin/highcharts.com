@@ -1,9 +1,6 @@
 $(function () {
-    var chart;
-    $(document).ready(function() {
-        chart = new Highcharts.Chart({
+        $('#container').highcharts({
             chart: {
-                renderTo: 'container',
                 type: 'column'
             },
             title: {
@@ -27,7 +24,7 @@ $(function () {
             },
             legend: {
                 align: 'right',
-                x: -100,
+                x: -70,
                 verticalAlign: 'top',
                 y: 20,
                 floating: true,
@@ -48,7 +45,10 @@ $(function () {
                     stacking: 'normal',
                     dataLabels: {
                         enabled: true,
-                        color: (Highcharts.theme && Highcharts.theme.dataLabelsColor) || 'white'
+                        color: (Highcharts.theme && Highcharts.theme.dataLabelsColor) || 'white',
+                        style: {
+                            textShadow: '0 0 3px black, 0 0 3px black'
+                        }
                     }
                 }
             },
@@ -65,4 +65,3 @@ $(function () {
         });
     });
     
-});

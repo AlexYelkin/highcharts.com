@@ -2,12 +2,11 @@ $(function() {
 	$.getJSON('http://www.highcharts.com/samples/data/jsonp.php?filename=usdeur.json&callback=?', function(data) {
 
 		// Create the chart
-		window.chart = new Highcharts.StockChart({
-			chart : {
-				renderTo : 'container'
-			},
+		$('#container').highcharts('StockChart', {
+			
 
 			rangeSelector : {
+				inputEnabled: $('#container').width() > 480,
 				selected : 1
 			},
 

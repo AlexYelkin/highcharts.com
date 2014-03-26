@@ -1,8 +1,7 @@
 $(function () {
-    var chart = new Highcharts.Chart({
+    $('#container').highcharts({
     
         chart: {
-            renderTo: 'container',
             marginRight: 50
         },
         
@@ -11,12 +10,13 @@ $(function () {
                 dataLabels: {
                     enabled: true,
                     align: 'left',
-                    crop: false,
                     style: {
                         fontWeight: 'bold'
                     },
                     x: 3,
-                    verticalAlign: 'middle'
+                    verticalAlign: 'middle',
+                    overflow: true,
+                    crop: false
                 },
                 y: 54.4
             }]

@@ -2,13 +2,13 @@ $(function() {
 	$.getJSON('http://www.highcharts.com/samples/data/jsonp.php?filename=aapl-c.json&callback=?', function(data) {
 		
 		// Create the chart
-		window.chart = new Highcharts.StockChart({
+		$('#container').highcharts('StockChart', {
 		    chart: {
-		        renderTo: 'container',
 		        type: 'area'
 		    },
 
 		    rangeSelector: {
+				inputEnabled: $('#container').width() > 480,
 		        selected: 1
 		    },
 

@@ -30,6 +30,7 @@ defaultPlotOptions.column = merge(defaultSeriesOptions, {
 		verticalAlign: null, // auto
 		y: null
 	},
+	stickyTracking: false,
 	threshold: 0
 });
 
@@ -38,13 +39,16 @@ defaultPlotOptions.column = merge(defaultSeriesOptions, {
  */
 var ColumnSeries = extendClass(Series, {
 	type: 'column',
-	tooltipOutsidePlot: true,
 	pointAttrToOptions: { // mapping between SVG attributes and the corresponding options
 		stroke: 'borderColor',
 		'stroke-width': 'borderWidth',
 		fill: 'color',
 		r: 'borderRadius'
 	},
+	cropShoulder: 0,
+	trackerGroups: ['group', 'dataLabelsGroup'],
+	negStacks: true, // use separate negative stacks, unlike area stacks where a negative 
+		// point is substracted from previous (#1910)
 	
 	/**
 	 * Initialize the series
@@ -67,23 +71,20 @@ var ColumnSeries = extendClass(Series, {
 	},
 
 	/**
-	 * Translate each point to the plot area coordinate system and find shape positions
+	 * Return the width and x offset of the columns adjusted for grouping, groupPadding, pointPadding,
+	 * pointWidth etc. 
 	 */
-	translate: function () {
+	getColumnMetrics: function () {
+
 		var series = this,
-			chart = series.chart,
 			options = series.options,
-			stacking = options.stacking,
-			borderWidth = options.borderWidth,
-			columnCount = 0,
 			xAxis = series.xAxis,
 			yAxis = series.yAxis,
 			reversedXAxis = xAxis.reversed,
-			stackGroups = {},
 			stackKey,
-			columnIndex;
-
-		Series.prototype.translate.apply(series);
+			stackGroups = {},
+			columnIndex,
+			columnCount = 0;
 
 		// Get the total number of column type series.
 		// This is called on every series. Consider moving this logic to a
@@ -91,10 +92,11 @@ var ColumnSeries = extendClass(Series, {
 		if (options.grouping === false) {
 			columnCount = 1;
 		} else {
-			each(chart.series, function (otherSeries) {
-				var otherOptions = otherSeries.options;
+			each(series.chart.series, function (otherSeries) {
+				var otherOptions = otherSeries.options,
+					otherYAxis = otherSeries.yAxis;
 				if (otherSeries.type === series.type && otherSeries.visible &&
-						series.options.group === otherOptions.group) { // used in Stock charts navigator series
+						yAxis.len === otherYAxis.len && yAxis.pos === otherYAxis.pos) {  // #642, #2086
 					if (otherOptions.stacking) {
 						stackKey = otherSeries.stackKey;
 						if (stackGroups[stackKey] === UNDEFINED) {
@@ -109,11 +111,10 @@ var ColumnSeries = extendClass(Series, {
 			});
 		}
 
-		// calculate the width and position of each column based on
-		// the number of column series in the plot, the groupPadding
-		// and the pointPadding options
-		var points = series.points,
-			categoryWidth = mathAbs(xAxis.transA) * (xAxis.ordinalSlope || options.pointRange || xAxis.closestPointRange || 1),
+		var categoryWidth = mathMin(
+				mathAbs(xAxis.transA) * (xAxis.ordinalSlope || options.pointRange || xAxis.closestPointRange || xAxis.tickInterval || 1), // #2610
+				xAxis.len // #1535
+			),
 			groupPadding = categoryWidth * options.groupPadding,
 			groupWidth = categoryWidth - 2 * groupPadding,
 			pointOffsetWidth = groupWidth / columnCount,
@@ -121,60 +122,103 @@ var ColumnSeries = extendClass(Series, {
 			pointPadding = defined(optionPointWidth) ? (pointOffsetWidth - optionPointWidth) / 2 :
 				pointOffsetWidth * options.pointPadding,
 			pointWidth = pick(optionPointWidth, pointOffsetWidth - 2 * pointPadding), // exact point width, used in polar charts
-			barW = mathCeil(mathMax(pointWidth, 1 + 2 * borderWidth)), // rounded and postprocessed for border width
 			colIndex = (reversedXAxis ? 
 				columnCount - (series.columnIndex || 0) : // #1251
 				series.columnIndex) || 0,
 			pointXOffset = pointPadding + (groupPadding + colIndex *
 				pointOffsetWidth - (categoryWidth / 2)) *
-				(reversedXAxis ? -1 : 1),
+				(reversedXAxis ? -1 : 1);
+
+		// Save it for reading in linked series (Error bars particularly)
+		return (series.columnMetrics = { 
+			width: pointWidth, 
+			offset: pointXOffset 
+		});
+			
+	},
+
+	/**
+	 * Translate each point to the plot area coordinate system and find shape positions
+	 */
+	translate: function () {
+		var series = this,
+			chart = series.chart,
+			options = series.options,
+			borderWidth = options.borderWidth,
+			yAxis = series.yAxis,
 			threshold = options.threshold,
 			translatedThreshold = series.translatedThreshold = yAxis.getThreshold(threshold),
-			minPointLength = pick(options.minPointLength, 5);
+			minPointLength = pick(options.minPointLength, 5),
+			metrics = series.getColumnMetrics(),
+			pointWidth = metrics.width,
+			seriesBarW = series.barW = mathCeil(mathMax(pointWidth, 1 + 2 * borderWidth)), // rounded and postprocessed for border width
+			pointXOffset = series.pointXOffset = metrics.offset,
+			xCrisp = -(borderWidth % 2 ? 0.5 : 0),
+			yCrisp = borderWidth % 2 ? 0.5 : 1;
+
+		if (chart.renderer.isVML && chart.inverted) {
+			yCrisp += 1;
+		}
+
+		Series.prototype.translate.apply(series);
 
 		// record the new values
-		each(points, function (point) {
-			var plotY = mathMin(mathMax(-999, point.plotY), yAxis.len + 999), // Don't draw too far outside plot area (#1303)
-				yBottom = pick(point.yBottom, translatedThreshold),
+		each(series.points, function (point) {
+			var yBottom = pick(point.yBottom, translatedThreshold),
+				plotY = mathMin(mathMax(-999 - yBottom, point.plotY), yAxis.len + 999 + yBottom), // Don't draw too far outside plot area (#1303, #2241)
 				barX = point.plotX + pointXOffset,
-				barY = mathCeil(mathMin(plotY, yBottom)),
-				barH = mathCeil(mathMax(plotY, yBottom) - barY),
-				stack = yAxis.stacks[(point.y < 0 ? '-' : '') + series.stackKey],
-				shapeArgs;
+				barW = seriesBarW,
+				barY = mathMin(plotY, yBottom),
+				right,
+				bottom,
+				fromTop,
+				fromLeft,
+				barH = mathMax(plotY, yBottom) - barY;
 
-			// Record the offset'ed position and width of the bar to be able to align the stacking total correctly
-			if (stacking && series.visible && stack && stack[point.x]) {
-				stack[point.x].setOffset(pointXOffset, barW);
-			}
-
-			// handle options.minPointLength
+			// Handle options.minPointLength
 			if (mathAbs(barH) < minPointLength) {
 				if (minPointLength) {
 					barH = minPointLength;
 					barY =
-						mathAbs(barY - translatedThreshold) > minPointLength ? // stacked
+						mathRound(mathAbs(barY - translatedThreshold) > minPointLength ? // stacked
 							yBottom - minPointLength : // keep position
-							translatedThreshold - (plotY <= translatedThreshold ? minPointLength : 0);
+							translatedThreshold - (yAxis.translate(point.y, 0, 1, 0, 1) <= translatedThreshold ? minPointLength : 0)); // use exact yAxis.translation (#1485)
 				}
 			}
 
+			// Cache for access in polar
 			point.barX = barX;
 			point.pointWidth = pointWidth;
 
-			// create shape type and shape args that are reused in drawPoints and drawTracker
-			point.shapeType = 'rect';
-			point.shapeArgs = shapeArgs = chart.renderer.Element.prototype.crisp.call(0, borderWidth, barX, barY, barW, barH); 
-			
-			if (borderWidth % 2) { // correct for shorting in crisp method, visible in stacked columns with 1px border
-				shapeArgs.y -= 1;
-				shapeArgs.height += 1;
+			// Round off to obtain crisp edges
+			fromLeft = mathAbs(barX) < 0.5;
+			right = mathRound(barX + barW) + xCrisp;
+			barX = mathRound(barX) + xCrisp;
+			barW = right - barX;
+
+			fromTop = mathAbs(barY) < 0.5;
+			bottom = mathRound(barY + barH) + yCrisp;
+			barY = mathRound(barY) + yCrisp;
+			barH = bottom - barY;
+
+			// Top and left edges are exceptions
+			if (fromLeft) {
+				barX += 1;
+				barW -= 1;
+			}
+			if (fromTop) {
+				barY -= 1;
+				barH += 1;
 			}
 
-			// make small columns responsive to mouse
-			point.trackerArgs = mathAbs(barH) < 3 && merge(point.shapeArgs, {
-				height: 6,
-				y: barY - 3
-			});
+			// Register shape type and arguments to be used in drawPoints
+			point.shapeType = 'rect';
+			point.shapeArgs = {
+				x: barX,
+				y: barY,
+				width: barW,
+				height: barH
+			};
 		});
 
 	},
@@ -184,7 +228,7 @@ var ColumnSeries = extendClass(Series, {
 	/**
 	 * Use a solid rectangle like the area series types
 	 */
-	drawLegendSymbol: AreaSeries.prototype.drawLegendSymbol,
+	drawLegendSymbol: LegendSymbolMixin.drawRectangle,
 	
 	
 	/**
@@ -199,20 +243,23 @@ var ColumnSeries = extendClass(Series, {
 	 */
 	drawPoints: function () {
 		var series = this,
+			chart = this.chart,
 			options = series.options,
-			renderer = series.chart.renderer,
+			renderer = chart.renderer,
+			animationLimit = options.animationLimit || 250,
 			shapeArgs;
-
 
 		// draw the columns
 		each(series.points, function (point) {
 			var plotY = point.plotY,
 				graphic = point.graphic;
+
 			if (plotY !== UNDEFINED && !isNaN(plotY) && point.y !== null) {
 				shapeArgs = point.shapeArgs;
+				
 				if (graphic) { // update
 					stop(graphic);
-					graphic.animate(merge(shapeArgs));
+					graphic[series.points.length < animationLimit ? 'animate' : 'attr'](merge(shapeArgs));
 
 				} else {
 					point.graphic = graphic = renderer[point.shapeType](shapeArgs)
@@ -226,124 +273,6 @@ var ColumnSeries = extendClass(Series, {
 			}
 		});
 	},
-	/**
-	 * Draw the individual tracker elements.
-	 * This method is inherited by pie charts too.
-	 */
-	drawTracker: function () {
-		var series = this,
-			chart = series.chart,
-			renderer = chart.renderer,
-			shapeArgs,
-			tracker,
-			trackerLabel = +new Date(),
-			options = series.options,
-			cursor = options.cursor,
-			css = cursor && { cursor: cursor },
-			trackerGroup = series.isCartesian && series.plotGroup('trackerGroup', null, VISIBLE, options.zIndex || 1, chart.trackerGroup),
-			rel,
-			plotY,
-			validPlotY,
-			points = series.points,
-			point,
-			i = points.length,
-			onMouseOver = function (event) {
-				rel = event.relatedTarget || event.fromElement;
-				if (chart.hoverSeries !== series && attr(rel, 'isTracker') !== trackerLabel) {
-					series.onMouseOver();
-				}
-				points[event.target._i].onMouseOver();
-			},
-			onMouseOut = function (event) {
-				if (!options.stickyTracking) {
-					rel = event.relatedTarget || event.toElement;
-					if (attr(rel, 'isTracker') !== trackerLabel) {
-						series.onMouseOut();
-					}
-				}
-			};
-			
-		while (i--) {
-			point = points[i];
-			tracker = point.tracker;
-			shapeArgs = point.trackerArgs || point.shapeArgs;
-			plotY = point.plotY;
-			validPlotY = !series.isCartesian || (plotY !== UNDEFINED && !isNaN(plotY));
-			delete shapeArgs.strokeWidth;
-			if (point.y !== null && validPlotY) {
-				if (tracker) {// update
-					tracker.attr(shapeArgs);
-
-				} else {
-					point.tracker = tracker =
-						renderer[point.shapeType](shapeArgs)
-						.attr({
-							isTracker: trackerLabel,
-							fill: TRACKER_FILL,
-							visibility: series.visible ? VISIBLE : HIDDEN
-						})
-						.on('mouseover', onMouseOver)
-						.on('mouseout', onMouseOut)
-						.css(css)
-						.add(point.group || trackerGroup); // pies have point group - see issue #118
-						
-					if (hasTouch) {
-						tracker.on('touchstart', onMouseOver);
-					}
-				}
-				tracker.element._i = i;
-			}
-		}
-	},
-	
-	/** 
-	 * Override the basic data label alignment by adjusting for the position of the column
-	 */
-	alignDataLabel: function (point, dataLabel, options,  alignTo, isNew) {
-		var chart = this.chart,
-			inverted = chart.inverted,
-			below = point.below || (point.plotY > pick(this.translatedThreshold, chart.plotSizeY)),
-			inside = (this.options.stacking || options.inside); // draw it inside the box?
-		
-		// Align to the column itself, or the top of it
-		if (point.shapeArgs) { // Area range uses this method but not alignTo
-			alignTo = merge(point.shapeArgs);
-			if (inverted) {
-				alignTo = {
-					x: chart.plotWidth - alignTo.y - alignTo.height,
-					y: chart.plotHeight - alignTo.x - alignTo.width,
-					width: alignTo.height,
-					height: alignTo.width
-				};
-			}
-				
-			// Compute the alignment box
-			if (!inside) {
-				if (inverted) {
-					alignTo.x += below ? 0 : alignTo.width;
-					alignTo.width = 0;
-				} else {
-					alignTo.y += below ? alignTo.height : 0;
-					alignTo.height = 0;
-				}
-			}
-		}
-		
-		// When alignment is undefined (typically columns and bars), display the individual 
-		// point below or above the point depending on the threshold
-		options.align = pick(
-			options.align, 
-			!inverted || inside ? 'center' : below ? 'right' : 'left'
-		);
-		options.verticalAlign = pick(
-			options.verticalAlign, 
-			inverted || inside ? 'middle' : below ? 'top' : 'bottom'
-		);
-		
-		// Call the parent method
-		Series.prototype.alignDataLabel.call(this, point, dataLabel, options, alignTo, isNew);
-	},
-
 
 	/**
 	 * Animate the column heights one by one from zero
@@ -351,46 +280,33 @@ var ColumnSeries = extendClass(Series, {
 	 */
 	animate: function (init) {
 		var series = this,
-			points = series.points,
-			options = series.options;
+			yAxis = this.yAxis,
+			options = series.options,
+			inverted = this.chart.inverted,
+			attr = {},
+			translatedThreshold;
 
-		if (!init) { // run the animation
-			/*
-			 * Note: Ideally the animation should be initialized by calling
-			 * series.group.hide(), and then calling series.group.show()
-			 * after the animation was started. But this rendered the shadows
-			 * invisible in IE8 standards mode. If the columns flicker on large
-			 * datasets, this is the cause.
-			 */
-
-			each(points, function (point) {
-				var graphic = point.graphic,
-					shapeArgs = point.shapeArgs,
-					yAxis = series.yAxis,
-					threshold = options.threshold;
-
-				if (graphic) {
-					// start values
-					graphic.attr({
-						height: 0,
-						y: defined(threshold) ? 
-							yAxis.getThreshold(threshold) :
-							yAxis.translate(yAxis.getExtremes().min, 0, 1, 0, 1)
-					});
-
-					// animate
-					graphic.animate({
-						height: shapeArgs.height,
-						y: shapeArgs.y
-					}, options.animation);
+		if (hasSVG) { // VML is too slow anyway
+			if (init) {
+				attr.scaleY = 0.001;
+				translatedThreshold = mathMin(yAxis.pos + yAxis.len, mathMax(yAxis.pos, yAxis.toPixels(options.threshold)));
+				if (inverted) {
+					attr.translateX = translatedThreshold - yAxis.len;
+				} else {
+					attr.translateY = translatedThreshold;
 				}
-			});
+				series.group.attr(attr);
 
+			} else { // run the animation
+				
+				attr.scaleY = 1;
+				attr[inverted ? 'translateX' : 'translateY'] = yAxis.pos;
+				series.group.animate(attr, series.options.animation);
 
-			// delete this function to allow it only once
-			series.animate = null;
+				// delete this function to allow it only once
+				series.animate = null;
+			}
 		}
-
 	},
 	
 	/**

@@ -1,9 +1,6 @@
 $(function () {
-    var chart;
-    $(document).ready(function() {
-        chart = new Highcharts.Chart({
+        $('#container').highcharts({
             chart: {
-                renderTo: 'container',
                 zoomType: 'x',
                 spacingRight: 20
             },
@@ -13,7 +10,7 @@ $(function () {
             subtitle: {
                 text: document.ontouchstart === undefined ?
                     'Click and drag in the plot area to zoom in' :
-                    'Drag your finger over the plot to zoom in'
+                    'Pinch the chart to zoom in'
             },
             xAxis: {
                 type: 'datetime',
@@ -25,8 +22,7 @@ $(function () {
             yAxis: {
                 title: {
                     text: 'Exchange rate'
-                },
-                showFirstLabel: false
+                }
             },
             tooltip: {
                 shared: true
@@ -40,18 +36,12 @@ $(function () {
                         linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1},
                         stops: [
                             [0, Highcharts.getOptions().colors[0]],
-                            [1, 'rgba(2,0,0,0)']
+                            [1, Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
                         ]
                     },
                     lineWidth: 1,
                     marker: {
-                        enabled: false,
-                        states: {
-                            hover: {
-                                enabled: true,
-                                radius: 5
-                            }
-                        }
+                        enabled: false
                     },
                     shadow: false,
                     states: {
@@ -184,4 +174,3 @@ $(function () {
         });
     });
     
-});

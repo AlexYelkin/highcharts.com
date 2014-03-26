@@ -1,13 +1,14 @@
 $(function() {
-	var chart = new Highcharts.StockChart({
+	$('#container').highcharts('StockChart', {
 	    
 	    chart: {
-	        renderTo: 'container'
 	    },
 	    
 	    plotOptions: {
 	    	candlestick: {
-	    		lineColor: 'red'
+	    		lineColor: '#2f7ed8',	    		
+	    		upLineColor: 'silver', // docs
+	    		upColor: 'silver'
 	    	}
 	    },
 	    

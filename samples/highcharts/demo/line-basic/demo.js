@@ -1,13 +1,5 @@
 $(function () {
-    var chart;
-    $(document).ready(function() {
-        chart = new Highcharts.Chart({
-            chart: {
-                renderTo: 'container',
-                type: 'line',
-                marginRight: 130,
-                marginBottom: 25
-            },
+        $('#container').highcharts({
             title: {
                 text: 'Monthly Average Temperature',
                 x: -20 //center
@@ -31,17 +23,12 @@ $(function () {
                 }]
             },
             tooltip: {
-                formatter: function() {
-                        return '<b>'+ this.series.name +'</b><br/>'+
-                        this.x +': '+ this.y +'°C';
-                }
+                valueSuffix: '°C'
             },
             legend: {
                 layout: 'vertical',
                 align: 'right',
-                verticalAlign: 'top',
-                x: -10,
-                y: 100,
+                verticalAlign: 'middle',
                 borderWidth: 0
             },
             series: [{
@@ -60,4 +47,3 @@ $(function () {
         });
     });
     
-});

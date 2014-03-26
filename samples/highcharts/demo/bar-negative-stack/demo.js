@@ -6,9 +6,8 @@ $(function () {
             '70-74', '75-79', '80-84', '85-89', '90-94',
             '95-99', '100 +'];
     $(document).ready(function() {
-        chart = new Highcharts.Chart({
+        $('#container').highcharts({
             chart: {
-                renderTo: 'container',
                 type: 'bar'
             },
             title: {
@@ -19,12 +18,18 @@ $(function () {
             },
             xAxis: [{
                 categories: categories,
-                reversed: false
+                reversed: false,
+                labels: {
+                    step: 1
+                }
             }, { // mirror axis on right side
                 opposite: true,
                 reversed: false,
                 categories: categories,
-                linkedTo: 0
+                linkedTo: 0,
+                labels: {
+                    step: 1
+                }
             }],
             yAxis: {
                 title: {

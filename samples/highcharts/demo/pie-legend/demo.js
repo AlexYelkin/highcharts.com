@@ -4,9 +4,8 @@ $(function () {
     $(document).ready(function () {
     	
     	// Build the chart
-        chart = new Highcharts.Chart({
+        $('#container').highcharts({
             chart: {
-                renderTo: 'container',
                 plotBackgroundColor: null,
                 plotBorderWidth: null,
                 plotShadow: false
@@ -15,8 +14,7 @@ $(function () {
                 text: 'Browser market shares at a specific website, 2010'
             },
             tooltip: {
-        	    pointFormat: '{series.name}: <b>{point.percentage}%</b>',
-            	percentageDecimals: 1
+        	    pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b>'
             },
             plotOptions: {
                 pie: {

@@ -1,16 +1,13 @@
 $(function () {
-    var chart;
-    $(document).ready(function() {
-        chart = new Highcharts.Chart({
+        $('#container').highcharts({
             chart: {
-                renderTo: 'container',
                 type: 'spline'
             },
             title: {
-                text: 'Snow depth in the Vikjafjellet mountain, Norway'
+                text: 'Snow depth at Vikjafjellet, Norway'
             },
             subtitle: {
-                text: 'An example of irregular time data in Highcharts JS'
+                text: 'Irregular time data in Highcharts JS'
             },
             xAxis: {
                 type: 'datetime',
@@ -112,4 +109,3 @@ $(function () {
         });
     });
     
-});

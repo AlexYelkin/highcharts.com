@@ -1,14 +1,14 @@
 $(function () {
     $.getJSON('http://www.highcharts.com/samples/data/jsonp.php?filename=range.json&callback=?', function(data) {
     
-    	window.chart = new Highcharts.StockChart({
+    	$('#container').highcharts('StockChart', {
     	
 		    chart: {
-		        renderTo: 'container',
 		        type: 'columnrange'
 		    },
 		    
 		    rangeSelector: {
+				inputEnabled: $('#container').width() > 480,
 		    	selected: 2
 		    },
 		    

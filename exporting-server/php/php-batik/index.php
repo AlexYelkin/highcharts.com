@@ -24,14 +24,16 @@ $svg = (string) $_POST['svg'];
 $filename = (string) $_POST['filename'];
 
 // prepare variables
-if (!$filename) $filename = 'chart';
+if (!$filename or !preg_match('/^[A-Za-z0-9\-_ ]+$/', $filename)) {
+	$filename = 'chart';
+}
 if (get_magic_quotes_gpc()) {
 	$svg = stripslashes($svg);	
 }
 
 // check for malicious attack in SVG
-if(strpos($svg,"<!ENTITY") !== false){
-	exit("Execution is topped, the posted SVG could contain code for a mailcious attack");
+if(strpos($svg,"<!ENTITY") !== false || strpos($svg,"<!DOCTYPE") !== false){
+	exit("Execution is topped, the posted SVG could contain code for a malicious attack");
 }
 
 $tempName = md5(rand());
@@ -50,13 +52,18 @@ if ($type == 'image/png') {
 	$ext = 'pdf';
 
 } elseif ($type == 'image/svg+xml') {
-	$ext = 'svg';	
+	$ext = 'svg';
+
+} else { // prevent fallthrough from global variables
+	$ext = 'txt';
 }
+
 $outfile = "temp/$tempName.$ext";
 
 if (isset($typeString)) {
 	
 	// size
+	$width = '';
 	if ($_POST['width']) {
 		$width = (int)$_POST['width'];
 		if ($width) $width = "-w $width";
